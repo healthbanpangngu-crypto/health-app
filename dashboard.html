@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
-    <title>หน้าหลัก - Health Volunteer</title>
+    <title>หน้าหลัก - อสม.สามารถ (Orsomo Smart)</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
@@ -29,7 +29,7 @@
             </div>
             <div>
                 <h1 id="header-vhv-name" class="text-sm font-bold text-[#00694a]">กำลังโหลดข้อมูล...</h1>
-                <p id="header-vhv-village" class="text-[11px] text-gray-500 font-medium mt-0.5">ระบบดูแลผู้ป่วยในชุมชน</p>
+                <p id="header-vhv-village" class="text-[11px] text-gray-500 font-medium mt-0.5">อสม.สามารถ (Orsomo Smart)</p>
             </div>
         </div>
         <button onclick="window.location.href='map_overview.html'" class="w-11 h-11 flex items-center justify-center rounded-full bg-white shadow-sm border border-gray-100 text-[#00694a] hover:bg-gray-50 transition-colors">
@@ -117,6 +117,15 @@
         <div id="empty-state" class="hidden text-center py-14 space-y-3 text-gray-400">
             <span class="material-symbols-outlined text-[48px]">person_search</span>
             <p class="text-[13px]">ไม่พบข้อมูลที่ตรงตามเงื่อนไข</p>
+        </div>
+        <!-- เครดิตผู้พัฒนา -->
+        <div class="text-center mt-10 mb-8 opacity-70">
+            <div class="flex items-center justify-center gap-1.5 mb-1 text-gray-400">
+                <span class="material-symbols-outlined text-[14px]">code</span>
+                <span class="text-[10px] font-bold uppercase tracking-wider">Developer Credit</span>
+            </div>
+            <p class="text-[11px] text-gray-500 font-bold">ศุภวุธ อสุนี</p>
+            <p class="text-[9px] text-gray-400 mt-0.5">นักวิชาการสาธารณสุขปฏิบัติการ</p>
         </div>
     </main>
 
@@ -206,7 +215,7 @@
 
         function setDefaultVHVProfile() {
             document.getElementById('header-vhv-name').innerText = 'อสม. เทศบาลบางแก้ว';
-            document.getElementById('header-vhv-village').innerText = 'ระบบดูแลผู้ป่วยในชุมชน';
+            document.getElementById('header-vhv-village').innerText = 'อสม.สามารถ (Orsomo Smart)';
             document.getElementById('header-profile-pic').innerHTML = 'อส';
             document.getElementById('my-village-number').innerText = '-';
         }
