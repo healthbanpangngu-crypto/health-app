@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>เข้าสู่ระบบ - เทศบาลเมืองบางแก้ว</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="config.js"></script>
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #f8fafc; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #00694a; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <!-- 1. สถานะกำลังโหลด -->
+    <div id="loading-screen" class="flex flex-col items-center justify-center">
+        <div class="loader mb-4"></div>
+        <p class="text-slate-500 font-medium">กำลังตรวจสอบสิทธิ์การเข้าใช้งาน...</p>
+    </div>
+
+        <!-- 2. หน้าต่างรอแอดมินอนุมัติ (เวอร์ชันปรับปรุง: ตัดปุ่มออก) -->
+    <div id="pending-screen" class="hidden w-full max-w-md bg-white rounded-3xl p-8 shadow-xl text-center">
+        <span class="material-symbols-outlined text-[70px] text-amber-500 mb-4 bg-amber-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto animate-pulse">schedule</span>
+        <h2 class="text-2xl font-bold text-slate-800">รอการตรวจสอบสิทธิ์</h2>
+        <p class="text-sm text-slate-500 mt-2 mb-4 leading-relaxed">ข้อมูลลงทะเบียนของคุณถูกส่งเข้าระบบเรียบร้อยแล้ว</p>
+        <p class="text-xs text-slate-400 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
+            โปรดรอเจ้าหน้าที่อนุมัติการเข้าถึงข้อมูลเพื่อความปลอดภัย<br>
+            (เมื่อได้รับอนุมัติแล้ว ระบบจะพาวาร์ปเข้าหน้าจอหลักโดยอัตโนมัติในการเข้าใช้งานครั้งถัดไปครับ)
+        </p>
+    </div>
+
+    <!-- 3. หน้าต่างลงทะเบียน อสม. (ปิด div ให้จบก่อน) -->
+    <div id="registration-screen" class="hidden w-full max-w-md bg-white rounded-3xl p-8 shadow-xl">
+        <div class="text-center mb-6">
+            <div class="w-16 h-16 bg-[#00694a]/10 text-[#00694a] rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <span class="material-symbols-outlined text-4xl">how_to_reg</span>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-800">ลงทะเบียน อสม.</h1>
+            <p class="text-sm text-slate-500 mt-1">กรุณาระบุข้อมูลเพื่อขอสิทธิ์เข้าใช้งานระบบ</p>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">ชื่อ - นามสกุล</label>
+                <input type="text" id="reg-name" placeholder="ระบุชื่อและนามสกุล" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#00694a] focus:ring-2 focus:ring-[#00694a]/20 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">เบอร์โทรศัพท์มือถือ</label>
+                <input type="tel" id="reg-phone" placeholder="08X-XXX-XXXX" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#00694a] focus:ring-2 focus:ring-[#00694a]/20 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">หมู่ที่รับผิดชอบ</label>
+                <select id="reg-village" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#00694a] focus:ring-2 focus:ring-[#00694a]/20 outline-none bg-white">
+                    <option value="" disabled selected>-- กำลังโหลดข้อมูลหมู่... --</option>
+                </select>
+            </div>
+            <button onclick="registerUser()" id="btn-register" class="w-full bg-[#00694a] hover:bg-[#005239] text-white font-bold py-3.5 rounded-xl shadow-lg mt-4 transition-all">ยืนยันการลงทะเบียน</button>
+        </div>
+    </div>
+    <div id="admin-trigger" class="hidden absolute bottom-6 text-center w-full max-w-md mx-auto">
+        <button onclick="showAdminRegistration()" class="text-[11px] text-slate-400 hover:text-slate-600 font-medium transition-colors flex items-center justify-center mx-auto gap-1">
+            <span class="material-symbols-outlined text-[14px]">lock</span> สำหรับเจ้าหน้าที่ระบบ (Admin)
+        </button>
+    </div>
+
+    <div id="admin-registration-screen" class="hidden w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl border-t-4 border-amber-500 relative z-10">
+        <div class="text-center mb-6">
+            <div class="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <span class="material-symbols-outlined text-4xl">admin_panel_settings</span>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-800">ลงทะเบียนเจ้าหน้าที่</h1>
+            <p class="text-sm text-slate-500 mt-1">เฉพาะผู้ดูแลระบบที่มีรหัสลับเท่านั้น</p>
+        </div>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">ชื่อ - นามสกุล</label>
+                <input type="text" id="admin-reg-name" placeholder="ระบุชื่อเจ้าหน้าที่" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">เบอร์โทรศัพท์มือถือ</label>
+                <input type="tel" id="admin-reg-phone" placeholder="08X-XXX-XXXX" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">รหัสลับ (Secret Code)</label>
+                <input type="password" id="admin-reg-secret" placeholder="กรอกรหัสลับเพื่อยืนยันสิทธิ์" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none">
+            </div>
+            <button onclick="registerAdmin()" id="btn-register-admin" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3.5 rounded-xl shadow-lg mt-4 transition-all">ตรวจสอบรหัสและยืนยัน</button>
+            <button onclick="hideAdminRegistration()" class="w-full text-slate-400 font-bold py-2 mt-2 hover:text-slate-600">กลับไปหน้าลงทะเบียน อสม.</button>
+        </div>
+    </div>
+
+    <script>
+        
+        document.addEventListener("DOMContentLoaded", () => {
+            liff.init({ liffId: LIFF_ID }).then(() => {
+                if (liff.isLoggedIn()) checkRegistration(); else liff.login();
+            });
+        });
+
+        // ฟังก์ชันสร้างตัวเลือกหมู่บ้านตาม Config ที่ได้มาจากหลังบ้าน (แก้ข้อ 2)
+        function buildVillageOptions(vCount) {
+            const vSelect = document.getElementById('reg-village');
+            vSelect.innerHTML = '<option value="" disabled selected>-- เลือกหมู่ที่รับผิดชอบ --</option>';
+            for(let i=1; i<=vCount; i++) {
+                vSelect.insertAdjacentHTML('beforeend', `<option value="${i}">หมู่ที่ ${i}</option>`);
+            }
+        }
+
+            async function checkRegistration() {
+            document.getElementById('registration-screen').classList.add('hidden');
+            document.getElementById('admin-registration-screen').classList.add('hidden');
+            document.getElementById('admin-trigger').classList.add('hidden');
+            document.getElementById('pending-screen').classList.add('hidden');
+            document.getElementById('loading-screen').classList.remove('hidden');
+
+            try {
+                const profile = await liff.getProfile();
+                const response = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'checkUserRegistration', uid: profile.userId }) });
+                const data = await response.json();
+
+                document.getElementById('loading-screen').classList.add('hidden');
+
+                if (data.status === 'registered') {
+                    // 1. เป็น Active (ผ่านการอนุมัติ) ให้เข้าสู่ระบบ
+                    if (data.role === 'ADMIN') window.location.href = 'admin_dashboard.html';
+                    else window.location.href = 'dashboard.html';
+                    
+                } else if (data.status === 'inactive') {
+                    // 2. ถ้าเป็น inactive ให้แยกระหว่าง "รออนุมัติ" กับ "โดนปฏิเสธ/บล็อค"
+                    const uStatus = String(data.user_status).toLowerCase();
+                    if (uStatus === 'rejected' || uStatus === 'blocked') {
+                        alert('บัญชีของคุณถูกปฏิเสธ หรือไม่อนุญาตให้เข้าถึงระบบ');
+                    } else {
+                        // ถ้าเป็น Pending ก็ตรึงหน้าจอรออนุมัติไว้
+                        document.getElementById('pending-screen').classList.remove('hidden');
+                    }
+                    
+                } else {
+                    // 3. ถ้าไม่มีชื่อเลย (unregistered) ให้เปิดหน้าลงทะเบียน
+                    buildVillageOptions(parseInt(data.village_count) || 15);
+                    document.getElementById('registration-screen').classList.remove('hidden');
+                    document.getElementById('admin-trigger').classList.remove('hidden');
+                }
+            } catch (error) { 
+                alert("เกิดข้อผิดพลาดในการเชื่อมต่อเครือข่าย"); 
+                document.getElementById('loading-screen').classList.add('hidden');
+                document.getElementById('pending-screen').classList.remove('hidden');
+            }
+        }
+
+        // ==========================================
+        // ฟังก์ชันของแอดมินที่เพิ่มใหม่
+        // ==========================================
+        function showAdminRegistration() {
+            // ปิดหน้าจอลงทะเบียน อสม.
+            document.getElementById('registration-screen').style.display = 'none';
+            document.getElementById('admin-trigger').style.display = 'none';
+            
+            // เปิดหน้าจอลงทะเบียน แอดมิน
+            const adminScreen = document.getElementById('admin-registration-screen');
+            adminScreen.classList.remove('hidden');
+            adminScreen.style.display = 'block'; // บังคับให้แสดงผล
+        }
+        
+        function hideAdminRegistration() {
+            // ปิดหน้าจอลงทะเบียน แอดมิน
+            document.getElementById('admin-registration-screen').style.display = 'none';
+            
+            // เปิดหน้าจอลงทะเบียน อสม.
+            document.getElementById('registration-screen').classList.remove('hidden');
+            document.getElementById('registration-screen').style.display = 'block'; // บังคับให้แสดงผล
+            document.getElementById('admin-trigger').style.display = 'block'; // บังคับให้แสดงผล
+        }
+
+        async function registerAdmin() {
+            const name = document.getElementById('admin-reg-name').value;
+            const phone = document.getElementById('admin-reg-phone').value;
+            const secretCode = document.getElementById('admin-reg-secret').value;
+            
+            if (!name || !phone || !secretCode) return alert("กรุณากรอกข้อมูลให้ครบถ้วน");
+
+            const btn = document.getElementById('btn-register-admin');
+            btn.disabled = true; btn.innerText = "กำลังตรวจสอบรหัส...";
+
+            try {
+                const profile = await liff.getProfile();
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'registerAdmin', uid: profile.userId, name: name, phone: phone, secretCode: secretCode })
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    alert("ยินดีต้อนรับเจ้าหน้าที่ระบบ! ลงทะเบียนสำเร็จ");
+                    window.location.href = 'admin_dashboard.html'; // ทะลุเข้าหน้าแอดมินทันที
+                } else if (data.status === 'invalid_code') {
+                    alert("รหัสลับไม่ถูกต้อง! ไม่อนุญาตให้เข้าใช้งานในฐานะแอดมิน");
+                    btn.disabled = false; btn.innerText = "ตรวจสอบรหัสและยืนยัน";
+                } else if (data.status === 'already_registered') {
+                    alert("บัญชีนี้เคยลงทะเบียนไว้แล้ว");
+                    window.location.reload();
+                } else { 
+                    alert(data.message || "เกิดข้อผิดพลาด"); 
+                    btn.disabled = false; btn.innerText = "ตรวจสอบรหัสและยืนยัน"; 
+                }
+            } catch (error) { 
+                alert("การเชื่อมต่อล้มเหลว กรุณาลองใหม่"); 
+                btn.disabled = false; btn.innerText = "ตรวจสอบรหัสและยืนยัน"; 
+            }
+        }
+
+        async function registerUser() {
+            const name = document.getElementById('reg-name').value;
+            const phone = document.getElementById('reg-phone').value;
+            const village = document.getElementById('reg-village').value;
+            
+            if (!name || !phone || !village) return alert("กรุณากรอกข้อมูลให้ครบถ้วนก่อนยืนยันครับ");
+
+            const btn = document.getElementById('btn-register');
+            btn.disabled = true; btn.innerText = "กำลังบันทึกข้อมูล...";
+
+            try {
+                const profile = await liff.getProfile();
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'registerUser', uid: profile.userId, name: name, role: 'VHV', village_no: village, phone: phone })
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // ลงทะเบียนเสร็จ เปลี่ยนหน้าจอเป็น "รออนุมัติ" ทันที ไม่ต้องรีโหลด
+                    document.getElementById('registration-screen').classList.add('hidden');
+                    document.getElementById('pending-screen').classList.remove('hidden');
+                } else { 
+                    alert("เกิดข้อผิดพลาด: อาจลงทะเบียนซ้ำ"); 
+                    btn.disabled = false; btn.innerText = "ยืนยันการลงทะเบียน"; 
+                }
+            } catch (error) { 
+                alert("การเชื่อมต่อล้มเหลว กรุณาลองใหม่"); 
+                btn.disabled = false; btn.innerText = "ยืนยันการลงทะเบียน"; 
+            }
+        }
+    </script>
+</body>
+</html>
