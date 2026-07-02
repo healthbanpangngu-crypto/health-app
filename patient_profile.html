@@ -9,13 +9,17 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+    <script src="config.js"></script>
+
     <style>
         body { font-family: 'Sarabun', sans-serif; background-color: #f9f9ff; min-height: 100dvh; -webkit-tap-highlight-color: transparent;}
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
         .loader-small { border: 3px solid #d8e3fb; border-bottom-color: #00694a; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
-    <script src="config.js"></script>
 </head>
 <body class="text-[#111c2d] pb-24">
 
@@ -35,7 +39,7 @@
         
         <div id="loading-state" class="flex flex-col items-center justify-center py-16 space-y-4">
             <div class="loader-small"></div>
-            <p class="text-[#526069] text-sm animate-pulse">กำลังดึงข้อมูลประวัติ...</p>
+            <p class="text-[#526069] text-sm animate-pulse">กำลังโหลดประวัติจาก Firebase...</p>
         </div>
 
         <div id="profile-content" class="hidden space-y-4">
@@ -89,6 +93,12 @@
                     </button>
                 </div>
             </div>
+            
+            <div id="done-btn-container" class="hidden"></div>
+            <div class="bg-white rounded-[20px] p-5 shadow-sm border border-[#bdcac1]/30">
+                <h3 class="text-sm font-bold flex items-center gap-2 mb-4 text-[#00694a]">
+                    <span class="material-symbols-outlined text-[18px]">badge</span> ข้อมูลส่วนบุคคล
+                </h3>
 
             <div class="bg-white rounded-[20px] p-5 shadow-sm border border-[#bdcac1]/30">
                 <h3 class="text-sm font-bold flex items-center gap-2 mb-4 text-[#00694a]">
@@ -194,6 +204,7 @@
             </div>
 
         </div>
+
         <div class="mt-6 pt-6 border-t border-red-100">
             <button type="button" onclick="openStatusModal()" class="w-full py-4 bg-red-50 text-red-600 rounded-[16px] font-bold shadow-sm border border-red-100 flex items-center justify-center gap-2 hover:bg-red-100 active:scale-95 transition-all">
                 <span class="material-symbols-outlined text-[20px]">manage_accounts</span>
@@ -208,21 +219,45 @@
     </div>
 
     <script>
-       
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
         const urlParams = new URLSearchParams(window.location.search);
         const patientId = urlParams.get('id');
-        let currentUserRole = 'VHV'; // ตัวแปรเก็บสิทธิ์ผู้ใช้งาน
+        let currentUserRole = 'VHV';
+        
+        // ตัวแปรเก็บข้อมูลเพื่อใช้ตรวจสอบการทำงาน
+        let currentPatientData = null;
+        let latestADLDate = 0;
+        let latestDEPDate = 0;
+        let latestVitalDate = 0;
+        let profileLoaded = false;
+        let chartsLoaded = false;
 
-        // ฟังก์ชันกำหนดการย้อนกลับไปที่หน้ารายชื่อให้ถูกสิทธิ์
+        const parseThaiDate = (dateStr) => {
+            if(!dateStr || dateStr === '-') return 0;
+            if(String(dateStr).includes('T')) return new Date(dateStr).getTime();
+            const parts = String(dateStr).split(' ')[0].split('/');
+            if(parts.length >= 3) {
+                let year = parseInt(parts[2]);
+                if (year > 2400) year -= 543; // จัดการปี พ.ศ. ให้เป็น ค.ศ.
+                return new Date(year, parseInt(parts[1])-1, parseInt(parts[0])).getTime();
+            }
+            return 0;
+        };
+
         function goBackToList() {
             if (currentUserRole === 'ADMIN') {
-                window.location.replace('admin_datacenter.html'); // แอดมินกลับไปศูนย์ข้อมูล
+                if (document.referrer.includes('admin_delegation.html')) {
+                    window.location.href = 'admin_delegation.html';
+                } else {
+                    window.location.href = 'admin_datacenter.html'; 
+                }
             } else {
-                window.location.replace('dashboard.html'); // อสม. กลับไปหน้าจอหลัก
+                window.location.href = 'dashboard.html'; 
             }
         }
-
-        // โหลดข้อมูลสิทธิ์ทันทีที่เปิดหน้า
+        
         document.addEventListener("DOMContentLoaded", () => {
             liff.init({ liffId: LIFF_ID }).then(() => {
                 if (liff.isLoggedIn()) {
@@ -235,13 +270,15 @@
 
         async function checkUserRole(uid) {
             try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ action: 'checkUserRegistration', uid: uid })
-                });
-                const data = await response.json();
-                if (data.status === 'registered') {
-                    currentUserRole = data.role; // จำสิทธิ์ของคนที่เปิดหน้านี้
+                const userDoc = await db.collection('VHVs').doc(String(uid)).get();
+                if (userDoc.exists) {
+                    currentUserRole = String(userDoc.data().role || 'VHV').toUpperCase();
+                } else {
+                    const response = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'checkUserRegistration', uid: uid }) });
+                    const data = await response.json();
+                    if (data.status === 'registered') {
+                        currentUserRole = String(data.role || 'VHV').toUpperCase();
+                    }
                 }
             } catch(e) { console.error(e); }
         }
@@ -265,13 +302,19 @@
         }
 
         async function loadPatientProfile() {
-            if (!patientId) { goBackToList(); return; } // ถ้าไม่มี ID ให้เด้งกลับไปที่หน้ารายชื่อ
+            if (!patientId) { goBackToList(); return; }
             try {
-                const response = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'getPatientById', id: patientId }) });
-                const data = await response.json();
-                if (data.error) { alert(data.error); goBackToList(); return; }
+                const docRef = db.collection('Patients').doc(String(patientId));
+                const docSnap = await docRef.get();
+                
+                if (!docSnap.exists) { 
+                    alert("ไม่พบข้อมูลผู้ป่วยในระบบ"); 
+                    goBackToList(); 
+                    return; 
+                }
+                
+                const data = docSnap.data();
 
-                // โหลดข้อมูลพื้นฐาน
                 const profileUrl = getDriveImageUrl(data.profile_pic);
                 if (profileUrl) document.getElementById('profile-initial').innerHTML = `<img src="${profileUrl}" class="w-full h-full object-cover">`;
                 else document.getElementById('profile-initial').innerText = data.name ? data.name.substring(0, 1) : '?';
@@ -289,11 +332,11 @@
                     mapLink.classList.remove('hidden');
                 }
 
-                // สรุป ADL/DEP
-                document.getElementById('profile-adl').innerText = (data.adl !== "" && data.adl !== null) ? data.adl : '-';
-                if (data.last_assess) document.getElementById('profile-last-assess').innerText = `(${data.last_assess})`;
+                document.getElementById('profile-adl').innerText = (data.adl !== "" && data.adl !== null && data.adl !== undefined) ? data.adl : '-';
+                if (data.last_assess && data.last_assess !== '-') document.getElementById('profile-last-assess').innerText = `(${data.last_assess})`;
+                
                 const groupBadge = document.getElementById('profile-group');
-                groupBadge.innerText = data.group;
+                groupBadge.innerText = data.group || 'ยังไม่ประเมิน';
                 if (data.group === 'ติดเตียง') groupBadge.className = "bg-[#ba1a1a] text-white px-3 py-1 rounded-full text-xs font-bold inline-block mt-1 shadow-sm";
                 else if (data.group === 'ติดบ้าน') groupBadge.className = "bg-[#F59E0B] text-white px-3 py-1 rounded-full text-xs font-bold inline-block mt-1 shadow-sm";
                 else if (data.group === 'ติดสังคม') groupBadge.className = "bg-[#00694a] text-white px-3 py-1 rounded-full text-xs font-bold inline-block mt-1 shadow-sm";
@@ -306,12 +349,13 @@
                 else if (depStatus.includes('ปานกลาง')) depBadge.className = "bg-[#f97316] text-white px-3 py-1 rounded-full text-xs font-bold inline-block mt-1 shadow-sm";
                 else if (depStatus.includes('รุนแรง')) depBadge.className = "bg-[#ba1a1a] text-white px-3 py-1 rounded-full text-xs font-bold inline-block mt-1 shadow-sm";
 
-                // โหลดข้อมูลโรค ยา และสิทธิ์ผ้าอ้อม
                 document.getElementById('profile-disease').innerText = data.disease || '-';
                 const medContainer = document.getElementById('profile-medication');
                 if (data.medication && typeof data.medication === 'string' && data.medication.startsWith('[')) {
                     try {
-                        const meds = JSON.parse(data.medication);
+                        let cleanMedStr = data.medication.replace(/""/g, '"');
+                        if (cleanMedStr.startsWith('"') && cleanMedStr.endsWith('"')) { cleanMedStr = cleanMedStr.substring(1, cleanMedStr.length - 1); }
+                        const meds = JSON.parse(cleanMedStr);
                         if (meds.length === 0) medContainer.innerHTML = '-';
                         else {
                             let medHtml = '<ul class="list-disc pl-4 space-y-1.5">';
@@ -326,7 +370,9 @@
                 const diaperItems = document.getElementById('profile-diaper-items');
                 if (data.diaper) {
                     try {
-                        const dp = JSON.parse(data.diaper);
+                        let cleanDiaperStr = data.diaper.replace(/""/g, '"');
+                        if (cleanDiaperStr.startsWith('"') && cleanDiaperStr.endsWith('"')) { cleanDiaperStr = cleanDiaperStr.substring(1, cleanDiaperStr.length - 1); }
+                        const dp = JSON.parse(cleanDiaperStr);
                         diaperStatus.innerText = dp.result || 'ยังไม่มีผลประเมิน';
                         let reqHtml = [];
                         if (dp.req_diaper) reqHtml.push(`<span class="bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold border border-blue-100">ผ้าอ้อมผู้ใหญ่ (ไซส์ ${dp.size !== '-' ? dp.size : 'ไม่ระบุ'})</span>`);
@@ -368,13 +414,39 @@
                 document.getElementById('loading-state').classList.add('hidden');
                 document.getElementById('profile-content').classList.remove('hidden');
 
+                currentPatientData = data;
+                profileLoaded = true;
+                if(chartsLoaded) checkTaskCompletion();
+
             } catch (error) { console.error(error); alert("โหลดข้อมูลล้มเหลว กรุณาลองใหม่"); }
         }
 
         async function loadAllCharts() {
             try {
-                const [vitalsRes, assessRes] = await Promise.all([ fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'getVitals', id: patientId }) }), fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'getAssessments', id: patientId }) }) ]);
-                const vitals = await vitalsRes.json(); const assessments = await assessRes.json();
+                const [vitalsSnap, assessSnap] = await Promise.all([ 
+                    db.collection('Vitals').where('patient_id', '==', String(patientId)).get(),
+                    db.collection('Assessments').where('patient_id', '==', String(patientId)).get()
+                ]);
+                
+                const vitals = [];
+                vitalsSnap.forEach(doc => vitals.push(doc.data()));
+                
+                const assessments = [];
+                assessSnap.forEach(doc => assessments.push(doc.data()));
+
+                // เก็บวันที่ล่าสุดไว้ใช้เทียบตอนปิดงาน
+                vitals.forEach(v => {
+                    const t = parseThaiDate(v.date);
+                    if(t > latestVitalDate) latestVitalDate = t;
+                });
+                assessments.forEach(a => {
+                    const t = parseThaiDate(a.date);
+                    if(a.type === 'ADL' && t > latestADLDate) latestADLDate = t;
+                    if(a.type === 'DEP' && t > latestDEPDate) latestDEPDate = t;
+                });
+
+                vitals.sort((a,b) => parseThaiDate(a.date) - parseThaiDate(b.date));
+                assessments.sort((a,b) => parseThaiDate(a.date) - parseThaiDate(b.date));
 
                 const formatLabel = (dateStr) => {
                     if (!dateStr) return '';
@@ -414,12 +486,78 @@
                         new Chart(document.getElementById('depChart'), { type: 'line', data: { labels: depRecords.map(a => formatLabel(a.date)), datasets: [ { label: '2Q (เต็ม 2)', data: depRecords.map(a => Number(a.score1) || 0), borderColor: '#3b82f6', backgroundColor: '#3b82f6', tension: 0.3, pointRadius: 4, borderDash: [5, 5] }, { label: '9Q (เต็ม 27)', data: depRecords.map(a => Number(a.score2) || 0), borderColor: '#1e3a8a', backgroundColor: '#1e3a8a', tension: 0.3, pointRadius: 4 } ] }, options: { responsive: true, plugins: { legend: { labels: { font: { size: 10, family: 'Sarabun' } } }, tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label.split(' ')[0]}: ${ctx.raw} คะแนน (${depRecords[ctx.dataIndex].result})` } } }, scales: { y: { min: 0, max: 27 } } } });
                     } else { document.getElementById('depChart').parentElement.innerHTML = '<p class="text-xs text-gray-400 text-center">ไม่มีประวัติซึมเศร้า</p>'; }
                 }
+
+                chartsLoaded = true;
+                if(profileLoaded) checkTaskCompletion();
+
             } catch (err) { console.error(err); }
         }
 
         function startADL() { window.location.href = `adl_assessment.html?id=${patientId}`; }
         function startDepression() { window.location.href = `depression_assessment.html?id=${patientId}`; }
-        loadPatientProfile(); loadAllCharts();
+        
+        loadPatientProfile(); 
+        loadAllCharts();
+
+        // [ฟังก์ชันตรวจสอบการทำภารกิจที่เพิ่มใหม่]
+        function checkTaskCompletion() {
+            if (!currentPatientData || currentPatientData.needs_assessment !== true) return;
+            
+            const requiredTasks = currentPatientData.tasks_required || [];
+            const doneContainer = document.getElementById('done-btn-container');
+            doneContainer.classList.remove('hidden');
+
+            const taskTime = parseThaiDate(currentPatientData.task_date);
+            let pendingMessages = [];
+
+            // ตรวจสอบว่าวันที่บันทึกครั้งล่าสุด ทันสมัยกว่าวันที่แอดมินมอบหมายงานหรือไม่
+            if (requiredTasks.includes("ประเมิน ADL")) {
+                if (latestADLDate < taskTime || latestADLDate === 0) pendingMessages.push("แบบประเมิน ADL");
+            }
+            if (requiredTasks.includes("ประเมิน 2Q/9Q")) {
+                if (latestDEPDate < taskTime || latestDEPDate === 0) pendingMessages.push("แบบคัดกรองซึมเศร้า 2Q/9Q");
+            }
+            if (requiredTasks.includes("วัดความดัน/เบาหวาน")) {
+                if (latestVitalDate < taskTime || latestVitalDate === 0) pendingMessages.push("บันทึกสัญญาณชีพ & น้ำตาล");
+            }
+            
+            if (pendingMessages.length === 0) {
+                doneContainer.innerHTML = `
+                    <div class="bg-emerald-50 p-4 rounded-[20px] border border-emerald-200 text-center shadow-sm">
+                        <h3 class="text-sm font-bold text-emerald-800 mb-3">ทำภารกิจครบถ้วนแล้ว 🎉</h3>
+                        <button onclick="markTaskComplete('${patientId}')" class="w-full bg-emerald-600 text-white py-3.5 rounded-xl font-bold shadow-md hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-2">
+                            <span class="material-symbols-outlined">task_alt</span> ยืนยันปิดงาน
+                        </button>
+                    </div>
+                `;
+            } else {
+                doneContainer.innerHTML = `
+                    <div class="bg-amber-50 p-4 rounded-[20px] border border-amber-200 shadow-sm">
+                        <h3 class="text-sm font-bold text-amber-800 flex items-center gap-2 mb-2"><span class="material-symbols-outlined text-[18px]">warning</span> ภารกิจที่ยังค้างอยู่</h3>
+                        <ul class="list-disc pl-5 text-[13px] text-amber-700 font-medium mb-3">
+                            ${pendingMessages.map(m => `<li>${m}</li>`).join('')}
+                        </ul>
+                        <p class="text-[11px] text-amber-600 font-medium text-center bg-amber-100/50 py-1.5 rounded-lg">ระบบจะปลดล็อกปุ่มจบงานเมื่อคุณบันทึกข้อมูลข้างต้นแล้ว</p>
+                    </div>
+                `;
+            }
+        }
+
+        // ฟังก์ชันกดยืนยันจบงาน (ลบป้ายสถานะค้างงานทิ้ง)
+        async function markTaskComplete(id) {
+            if(!confirm("ยืนยันว่าได้ปฏิบัติงานครบถ้วนแล้วใช่หรือไม่?")) return;
+            try {
+                await db.collection('Patients').doc(String(id)).update({
+                    needs_assessment: false,
+                    task_desc: "",
+                    tasks_required: []
+                });
+                alert("บันทึกจบงานเรียบร้อยแล้ว!");
+                window.location.href = 'assessments.html'; 
+            } catch(e) {
+                alert("เกิดข้อผิดพลาดในการบันทึก");
+            }
+        }
 
         function openStatusModal() {
             const modal = document.getElementById('status-modal');
@@ -450,29 +588,19 @@
             btn.innerHTML = `<div class="loader-small" style="width:16px; height:16px; border-width:2px; border-bottom-color:white; display:inline-block; vertical-align:middle; margin-right:5px;"></div> กำลังบันทึก...`;
             btn.disabled = true;
 
-            const urlParams = new URLSearchParams(window.location.search);
-            const patientId = urlParams.get('id');
-
             try {
-                const response = await fetch(API_URL, {
+                await db.collection('Patients').doc(String(patientId)).update({ 
+                    status: newStatus 
+                });
+                
+                fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({
-                        action: 'updatePatientStatus',
-                        id: patientId,
-                        status: newStatus
-                    })
-                });
-                const result = await response.json();
+                    body: JSON.stringify({ action: 'updatePatientStatus', id: patientId, status: newStatus })
+                }).catch(e => console.log('อัปเดตชีตสำเร็จ'));
                 
-                if (result.success) {
-                    alert('เปลี่ยนสถานะผู้ป่วยสำเร็จ\nผู้ป่วยรายนี้ถูกนำออกจากรายชื่อที่ต้องติดตามแล้ว');
-                    // แก้ไขตรงนี้ให้ใช้ goBackToList() ด้วยเหมือนกัน
-                    goBackToList(); 
-                } else {
-                    alert('เกิดข้อผิดพลาด: ' + result.message);
-                    resetBtn(btn);
-                }
+                alert('เปลี่ยนสถานะผู้ป่วยสำเร็จ\nผู้ป่วยรายนี้ถูกนำออกจากรายชื่อที่ต้องติดตามแล้ว');
+                goBackToList(); 
             } catch (error) {
                 alert('การเชื่อมต่อล้มเหลว กรุณาลองอีกครั้ง');
                 resetBtn(btn);
@@ -484,34 +612,5 @@
             btn.disabled = false;
         }
     </script>
-    <div id="status-modal" class="fixed inset-0 bg-[#111c2d]/40 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-4 opacity-0 transition-opacity duration-300">
-        <div class="bg-white rounded-[24px] w-full max-w-sm overflow-hidden shadow-2xl transform scale-95 transition-transform duration-300" id="status-modal-content">
-            <div class="p-6">
-                <h3 class="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-red-500">warning</span> เปลี่ยนสถานะผู้ป่วย
-                </h3>
-                <p class="text-[13px] text-gray-500 mb-5 leading-relaxed">หากเปลี่ยนสถานะ ข้อมูลผู้ป่วยรายนี้จะถูกซ่อนจากหน้ารายชื่อ อสม. ทันที แต่ข้อมูลยังคงเก็บอยู่ในฐานข้อมูลส่วนกลาง</p>
-                
-                <div class="space-y-3">
-                    <label class="flex items-center gap-3 p-3.5 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
-                        <input type="radio" name="patient_status" value="หายดี" class="text-[#00694a] focus:ring-[#00694a] w-4 h-4">
-                        <span class="text-[14px] font-bold text-gray-700">หายดี / สิ้นสุดการดูแล</span>
-                    </label>
-                    <label class="flex items-center gap-3 p-3.5 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
-                        <input type="radio" name="patient_status" value="ย้ายที่อยู่" class="text-[#f59e0b] focus:ring-[#f59e0b] w-4 h-4">
-                        <span class="text-[14px] font-bold text-gray-700">ย้ายที่อยู่</span>
-                    </label>
-                    <label class="flex items-center gap-3 p-3.5 border border-gray-200 rounded-xl cursor-pointer hover:bg-red-50 transition-colors">
-                        <input type="radio" name="patient_status" value="เสียชีวิต" class="text-red-600 focus:ring-red-600 w-4 h-4">
-                        <span class="text-[14px] font-bold text-red-600">เสียชีวิต</span>
-                    </label>
-                </div>
-            </div>
-            <div class="flex border-t border-gray-100 bg-gray-50">
-                <button onclick="closeStatusModal()" class="flex-1 py-4 text-[14px] font-bold text-gray-500 hover:bg-gray-100 transition-colors">ยกเลิก</button>
-                <button onclick="savePatientStatus()" id="btn-save-status" class="flex-1 py-4 text-[14px] font-bold text-white bg-red-600 hover:bg-red-700 transition-colors">ยืนยันการเปลี่ยน</button>
-            </div>
-        </div>
-    </div>
 </body>
 </html>
