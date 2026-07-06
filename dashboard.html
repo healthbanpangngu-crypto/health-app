@@ -194,7 +194,7 @@
 
                     document.getElementById('header-vhv-name').innerText = data.name;
                     
-                    const hospital = data.hospital_name || 'เทศบาลเมืองบางแก้ว';
+                    const hospital = data.hospital_name || 'รพ.สต.บ้านปางงู';
                     if (data.village_no) {
                         vhvCurrentVillage = data.village_no;
                         document.getElementById('header-vhv-village').innerText = 'หมู่ที่ ' + data.village_no + ' | ' + hospital;
@@ -215,7 +215,7 @@
                     const data = await response.json();
                     if (data.status === 'registered') {
                         document.getElementById('header-vhv-name').innerText = data.name;
-                        const hospital = data.hospital_name || 'เทศบาลเมืองบางแก้ว';
+                        const hospital = data.hospital_name || 'รพ.สต.บ้านปางงู';
                         if (data.village) {
                             vhvCurrentVillage = data.village;
                             document.getElementById('header-vhv-village').innerText = 'หมู่ที่ ' + data.village + ' | ' + hospital;
@@ -233,7 +233,7 @@
         }
 
         function setDefaultVHVProfile() {
-            document.getElementById('header-vhv-name').innerText = 'อสม. เทศบาลบางแก้ว';
+            document.getElementById('header-vhv-name').innerText = 'อสม. รพ.สต.บ้านปางงู';
             document.getElementById('header-vhv-village').innerText = 'อสม.สามารถ (Orsomo Smart)';
             document.getElementById('header-profile-pic').innerHTML = 'อส';
             document.getElementById('my-village-number').innerText = '-';
