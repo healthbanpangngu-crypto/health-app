@@ -22,7 +22,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbw6mxBtn77nNB0sBRFea1AT
 const DEFAULT_CONFIGS = {
     HOSPITAL_NAME: "โรงพยาบาลส่งเสริมสุขภาพตำบลบ้านปางงู", 
     VILLAGE_COUNT: 10,
-    SYSTEM_NAME: "ระบบบริหารจัดการข้อมูลสุขภาพชุมชน",
+    SYSTEM_NAME: "อสม.สามารถ (Orsamo Smart)",
     DIAPER_PRICE: 9.50,
     UNDERPAD_PRICE: 6.00
 };
