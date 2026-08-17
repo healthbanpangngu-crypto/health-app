@@ -21,10 +21,50 @@ const API_URL = "https://script.google.com/macros/s/AKfycbw6mxBtn77nNB0sBRFea1AT
 // 4. การตั้งค่าระบบเบื้องต้นของหน่วยงานใหม่
 const DEFAULT_CONFIGS = {
     HOSPITAL_NAME: "โรงพยาบาลส่งเสริมสุขภาพตำบลบ้านปางงู", 
-    VILLAGE_COUNT: 10,
+    VILLAGE_COUNT: 11,
     SYSTEM_NAME: "อสม.สามารถ (Orsamo Smart)",
     DIAPER_PRICE: 9.50,
     UNDERPAD_PRICE: 6.00
+};
+
+// ==========================================
+// 🚀 ระบบแจ้งเตือนอัจฉริยะ (Toast Notification สำหรับ Admin)
+// ==========================================
+window.showToast = function(message, type = 'success', redirectUrl = null) {
+    let container = document.getElementById('orsomo-toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'orsomo-toast-container';
+        container.className = 'fixed top-5 left-1/2 transform -translate-x-1/2 z-[99999] flex flex-col gap-3 pointer-events-none w-full max-w-sm px-4';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    const bgColor = type === 'success' ? 'bg-[#00694a]' : (type === 'error' ? 'bg-red-600' : 'bg-amber-500');
+    const icon = type === 'success' ? 'check_circle' : (type === 'error' ? 'error' : 'info');
+    
+    toast.className = `${bgColor} text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 transform transition-all duration-300 -translate-y-10 opacity-0`;
+    toast.innerHTML = `<span class="material-symbols-outlined text-[24px]">${icon}</span><span class="font-bold text-sm">${message}</span>`;
+    
+    container.appendChild(toast);
+
+    requestAnimationFrame(() => {
+        toast.classList.remove('-translate-y-10', 'opacity-0');
+        toast.classList.add('translate-y-0', 'opacity-100');
+    });
+
+    setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('-translate-y-10', 'opacity-0');
+        setTimeout(() => {
+            toast.remove();
+            if (redirectUrl) {
+                if (redirectUrl === 'reload') window.location.reload();
+                else if (redirectUrl === 'back') window.history.back();
+                else window.location.href = redirectUrl;
+            }
+        }, 300); 
+    }, 3000); // แสดง 3 วินาที
 };
 
 // ==========================================
